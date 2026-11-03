@@ -3,7 +3,7 @@
 A ~6-minute animated "TV news special" built from the Filipe & Miguel script
 (studio anchor + field correspondent), rendered entirely from code.
 
-**Final video:** `russian_civil_war_special_report.mp4` (1920×1080, 25 fps, AAC stereo)
+**Final video:** `russian_civil_war_special_report.mp4` (not committed: 126 MB exceeds GitHub's 100 MB file limit) (1920×1080, 25 fps, AAC stereo)
 
 ## What's in it
 - **Intro + 6 part title cards** (How it began · Reds vs. Whites · On the ground · The tide turns · Victory & a new state · The final word)
