@@ -399,13 +399,28 @@ def r_outro(t):
         ra = anim(lt, 1.0 + i * .5, .6)
         x = W / 2 - 420 + i * 840 / 1
         x = W / 2 + (-260 if i == 0 else 260)
-        paste(img, figure("F" if i == 0 else "M", 0, False, 0.42), (x - FW * .42 / 2, 400 + (1 - ra) * 30), ra)
+        from figures import use_photos, photo
+        if use_photos():
+            who = "F" if i == 0 else "M"
+            ph = photo(who, 560 if who == "F" else 620)
+            box = ph.crop((0, 0, ph.width, int(ph.width * 0.62)))
+            sz = 300
+            # circular portrait: crop head & shoulders square
+            sq = ph.crop(((ph.width - int(ph.width * .62)) // 2, 0, (ph.width + int(ph.width * .62)) // 2, int(ph.width * .62))).resize((sz, sz), Image.LANCZOS)
+            bgc = Image.new("RGBA", (sz, sz), (30, 46, 80, 255)); bgc.alpha_composite(sq)
+            m = Image.new("L", (sz * 3, sz * 3), 0); ImageDraw.Draw(m).ellipse((0, 0, sz * 3 - 1, sz * 3 - 1), fill=255)
+            bgc.putalpha(m.resize((sz, sz), Image.LANCZOS))
+            ring = Image.new("RGBA", (sz + 16, sz + 16), (0, 0, 0, 0)); ImageDraw.Draw(ring).ellipse((0, 0, sz + 15, sz + 15), fill=GOLD)
+            ring.alpha_composite(bgc, (8, 8))
+            paste(img, ring, (x - ring.width / 2, 410 + (1 - ra) * 30), ra)
+        else:
+            paste(img, figure("F" if i == 0 else "M", 0, False, 0.42), (x - FW * .42 / 2, 400 + (1 - ra) * 30), ra)
         draw_text(img, (x, 750 + (1 - ra) * 30), n, font("black", 54), WHITE, anchor="mm", alpha=ra)
         draw_text(img, (x, 800 + (1 - ra) * 30), r, font("bold", 26), GOLD, anchor="mm", alpha=ra)
     ca = anim(lt, 2.5, .8)
     draw_text(img, (W / 2, 900), "HNN · History News Network is fictional — this is a historical news re-creation of events from 1917–1922.",
               font("med", 26), (190, 200, 215, 255), anchor="mm", alpha=ca)
-    draw_text(img, (W / 2, 945), "Voices: synthesised (Piper TTS) · Maps: Natural Earth-derived outlines · Illustration & animation: procedural",
+    draw_text(img, (W / 2, 945), "Maps: Natural Earth-derived outlines · Sets, graphics & animation: procedural · Music: original",
               font("med", 22), (150, 160, 180, 255), anchor="mm", alpha=ca)
     fo = clamp((lt - (TL["outro"][1] - TL["outro"][0] - 1.6)) / 1.4)
     if fo > 0:

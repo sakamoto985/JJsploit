@@ -81,8 +81,20 @@ def studio_frame(screen_img, frame, env, speaking, cam=(1.0, 0.5, 0.5), out=(W, 
     from figures import mouth_level, blink_at
     m = mouth_level(env, frame, speaking)
     bob = math.sin(frame / 19.0) * 3 + (env[min(frame, len(env) - 1)] * 5 if speaking else 0)
-    fig = figure("F", m, blink_at(frame, 3))
-    comp(img, fig, (ANCHOR_X - FW // 2, int(ANCHOR_TOP + bob)))
+    from figures import use_photos, photo, rim
+    if use_photos():
+        pw = 820
+        pulse = 1 + 0.006 * (env[min(frame, len(env) - 1)] if speaking else 0)
+        ph = photo("F", pw)
+        if pulse > 1.001:
+            ph = ph.resize((int(ph.width * pulse), int(ph.height * pulse)), Image.BILINEAR)
+        g, pad = rim("F", pw, (90, 150, 255))
+        x = ANCHOR_X - ph.width // 2; y = int(400 + bob * 0.6 - (ph.height - photo("F", pw).height) * 0.3)
+        comp(img, g, (x - pad, y - pad))
+        comp(img, ph, (x, y))
+    else:
+        fig = figure("F", m, blink_at(frame, 3))
+        comp(img, fig, (ANCHOR_X - FW // 2, int(ANCHOR_TOP + bob)))
     comp(img, desk)
     zoom, cx, cy = cam
     cw = SW / zoom; ch = cw * 9 / 16
@@ -358,7 +370,28 @@ def field_frame(kind, t, frame, env, speaking, reporter=True, out=(W, H), push=0
         a = int(120 + sz * 120)
         d.ellipse((x - size, y - size, x + size, y + size), fill=col + (a,))
     comp(frame_img, p)
-    if reporter:
+    from figures import use_photos, photo, rim, mic_sprite
+    if reporter and use_photos():
+        tint = {"city": (150, 160, 185), "ruins": (230, 140, 80), "camp": (170, 175, 190), "quiet": (150, 130, 170)}[kind]
+        pw = 860
+        lv = env[min(frame, len(env) - 1)] if speaking else 0
+        ph = photo("M", pw, tint, 0.10)
+        pulse = 1 + 0.006 * lv
+        if pulse > 1.001:
+            ph = ph.resize((int(ph.width * pulse), int(ph.height * pulse)), Image.BILINEAR)
+        bob = math.sin(frame / 15.0) * 3 + lv * 4
+        x = 1400 - ph.width / 2 + sx * 0.5; y = 105 + bob
+        g, pad = rim("M", pw, tint)
+        if sc != 1:
+            ph = ph.resize((int(ph.width * sc), int(ph.height * sc)), Image.BILINEAR)
+            g = g.resize((int(g.width * sc), int(g.height * sc)), Image.BILINEAR)
+        comp(frame_img, g, (int((x - pad) * sc), int((y - pad) * sc)))
+        comp(frame_img, ph, (int(x * sc), int(y * sc)))
+        mic = mic_sprite()
+        if sc != 1:
+            mic = mic.resize((int(mic.width * sc), int(mic.height * sc)), Image.BILINEAR)
+        comp(frame_img, mic, (int((1180 + sx * .5) * sc), int((640 + bob * .5) * sc)))
+    elif reporter:
         from figures import mouth_level, blink_at
         m = mouth_level(env, frame, speaking)
         scale = 1.3

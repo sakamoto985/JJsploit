@@ -162,3 +162,62 @@ def blink_at(frame, seed):
     # blink ~ every 3.3s for 3 frames
     period = 83 + (seed * 17) % 23
     return (frame + seed * 31) % period < 3
+
+
+# ------------------------------------------------------------------ real photos (cut-outs)
+import os as _os
+ASSETS = _os.path.join(_os.path.dirname(__file__), "..", "assets")
+PHOTOS = {"F": "filipe_cut.png", "M": "miguel_cut.png"}
+
+
+def use_photos():
+    return all(_os.path.exists(_os.path.join(ASSETS, f)) for f in PHOTOS.values())
+
+
+@functools.lru_cache(maxsize=16)
+def photo(who, width, tint=None, tint_amt=0.0):
+    """Cut-out photo, edge-cleaned, colour-graded, resized to `width`."""
+    from PIL import ImageFilter, ImageEnhance
+    im = Image.open(_os.path.join(ASSETS, PHOTOS[who])).convert("RGBA")
+    a = im.getchannel("A").filter(ImageFilter.MinFilter(5)).filter(ImageFilter.GaussianBlur(1.5))
+    rgb = im.convert("RGB")
+    rgb = ImageEnhance.Contrast(rgb).enhance(1.06)
+    rgb = ImageEnhance.Color(rgb).enhance(1.05)
+    if tint is not None and tint_amt > 0:
+        rgb = Image.blend(rgb, Image.new("RGB", rgb.size, tint[:3]), tint_amt)
+    # soften the hard photo borders (bottom + sides) so the torso blends into the scene
+    import numpy as _np
+    A = _np.asarray(a, _np.float32)
+    hh, ww = A.shape
+    yy = _np.linspace(0, 1, hh)[:, None]; xx = _np.linspace(0, 1, ww)[None, :]
+    fade = _np.clip((1 - yy) / 0.16, 0, 1) * _np.clip(xx / 0.06, 0, 1) * _np.clip((1 - xx) / 0.06, 0, 1)
+    a = Image.fromarray((A * fade).astype(_np.uint8))
+    im = rgb.convert("RGBA"); im.putalpha(a)
+    h = int(im.height * width / im.width)
+    return im.resize((width, h), Image.LANCZOS)
+
+
+@functools.lru_cache(maxsize=8)
+def rim(who, width, color):
+    """Soft coloured glow around the silhouette (virtual-set rim light)."""
+    from PIL import ImageFilter
+    p = photo(who, width)
+    pad = 40
+    a = Image.new("L", (p.width + 2 * pad, p.height + 2 * pad), 0)
+    a.paste(p.getchannel("A"), (pad, pad))
+    a = a.filter(ImageFilter.GaussianBlur(18)).point(lambda v: int(v * 0.55))
+    g = Image.new("RGBA", a.size, color[:3] + (0,)); g.putalpha(a)
+    return g, pad
+
+
+@functools.lru_cache(maxsize=2)
+def mic_sprite(h=420):
+    im, s = ss_canvas(110, h, 3); d = ImageDraw.Draw(im)
+    S = lambda v: v * s
+    d.rounded_rectangle((S(40), S(120), S(70), S(h)), radius=S(10), fill=(22, 22, 26, 255))
+    d.ellipse((S(18), S(0), S(92), S(92)), fill=(48, 48, 54, 255))
+    for k in range(6):
+        d.line((S(24), S(14 + k * 12), S(86), S(14 + k * 12)), fill=(80, 80, 88, 255), width=int(S(2)))
+    d.rounded_rectangle((S(8), S(80), S(102), S(150)), radius=S(8), fill=RED)
+    d.text((S(55), S(116)), "HNN", font=font("black", int(S(28))), fill=WHITE, anchor="mm")
+    return down(im, s)
