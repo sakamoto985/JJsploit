@@ -160,9 +160,9 @@ def build_music():
     o0 = TL["outro"][0]
     add(music, timpani(55, 2.0), o0 + 0.1, 0.9)
     add(music, brass(["D3", "A3", "D4", "F4"], 1.6), o0 + 0.1, 0.6)
-    theme_bed(o0 + 0.1, o0 + 7.0, music, 0.8)
-    add(music, brass(["D3", "A3", "D4", "F4", "A4"], 3.2), o0 + 6.9, 0.7)
-    add(music, timpani(55, 3.0), o0 + 6.9, 1.0)
+    theme_bed(o0 + 0.1, o0 + 5.0, music, 0.8)
+    add(music, brass(["D3", "A3", "D4", "F4", "A4"], 2.4), o0 + 4.9, 0.7)
+    add(music, timpani(55, 2.4), o0 + 4.9, 1.0)
     return music, bed
 
 

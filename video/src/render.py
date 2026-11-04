@@ -272,25 +272,37 @@ def _jpg(path):
 
 
 def video_frame(spk, t):
-    """Frame of `spk`'s recording at time t; between lines, hold the nearest line's first/last frame."""
-    ls = [l for l in LINES if l["spk"] == spk and l.get("media")]
-    if not ls:
-        return None
-    cur = next((l for l in ls if l["t0"] - 0.3 <= t <= l["t1"] + 0.3), None)
-    if cur is None:
-        nxt = [l for l in ls if l["t0"] > t]
-        cur = nxt[0] if nxt else ls[-1]
-    i = int(clamp((t - cur["t0"]) * FPS, 0, cur["nframes"] - 1))
-    return _jpg(f"{cur['media']}/{i + 1:05d}.jpg")
+    cur, i, _ = video_index(spk, t)
+    return None if cur is None else _jpg(f"{cur['media']}/{i + 1:05d}.jpg")
+
+
+def video_seg(spk, t):
+    return video_index(spk, t)[2]
 
 
 def video_index(spk, t):
+    """(line, source frame index, edit-segment number) for `spk` at programme time t."""
     ls = [l for l in LINES if l["spk"] == spk and l.get("media")]
+    if not ls:
+        return None, 0, 0
     cur = next((l for l in ls if l["t0"] - 0.3 <= t <= l["t1"] + 0.3), None)
     if cur is None:
         nxt = [l for l in ls if l["t0"] > t]
         cur = nxt[0] if nxt else ls[-1]
-    return cur, int(clamp((t - cur["t0"]) * FPS, 0, cur["nframes"] - 1))
+    dt = t - cur["t0"]
+    seg = 0
+    if cur.get("map"):
+        sp = cur.get("speed", 1.0)
+        mp = cur["map"]
+        seg = 0
+        for k, (d0, k0, ln) in enumerate(mp):
+            if dt >= d0:
+                seg = k
+        d0, k0, ln = mp[seg]
+        src = k0 + clamp(dt - d0, 0, ln) * sp
+    else:
+        src = dt
+    return cur, int(clamp(src * FPS, 0, cur["nframes"] - 1)), seg
 
 
 def has_mattes(spk):
@@ -306,7 +318,7 @@ def _soft():
 
 def keyed_person(spk, t, size, tint=None):
     """RGBA cut-out of the correspondent's live frame (white wall removed)."""
-    cur, i = video_index(spk, t)
+    cur, i, _ = video_index(spk, t)
     fr = _jpg(f"{cur['media']}/{i + 1:05d}.jpg")
     m = Image.open(f"{cur['media']}/mask/{i + 1:05d}.png").resize(fr.size, Image.BILINEAR)
     a = np.asarray(m, np.float32) / 255
@@ -344,7 +356,8 @@ def graded(fr, size, zoom=1.0, cx=0.5, cy=0.45):
 
 def r_video_full(spk, shot, t):
     lt = t - shot["t0"]; dur = shot["t1"] - shot["t0"]
-    img = graded(video_frame(spk, t), (W, H), 1.0 + 0.04 * lt / max(dur, 1))
+    punch = 1.0 + (0.09 if video_seg(spk, t) % 2 else 0.0)
+    img = graded(video_frame(spk, t), (W, H), punch + 0.04 * lt / max(dur, 1), cy=0.4)
     comp(img, vignette(W, H, .35))
     return img
 
@@ -358,7 +371,8 @@ def r_video_studio(shot, t, vis):
     x, y = 70, 150
     d = Draw(img)
     d.rectangle((x - 6, y - 6, x + vw + 6, y + vh + 6), fill=(229, 181, 74, 255))
-    img.paste(graded(video_frame("F", t), (vw, vh), 1.0 + 0.03 * min(lt / 10, 1)), (x, y))
+    punch = 1.0 + (0.08 if video_seg("F", t) % 2 else 0.0)
+    img.paste(graded(video_frame("F", t), (vw, vh), punch + 0.03 * min(lt / 10, 1), cy=0.4), (x, y))
     scr = studio_screen(p["num"], vis == "studio_breaking").convert("RGB").resize((590, 332), Image.LANCZOS)
     a = anim(lt, .2, .6)
     sx = 1290 + (1 - a) * 80

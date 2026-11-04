@@ -133,12 +133,44 @@ def real_line(path, sents, tag):
         bounds.append(min(near, key=lambda p: abs(p - tgt)) if near else tgt)
     bounds.append(sp1)
     offs = [(bounds[i], bounds[i + 1]) for i in range(len(sents))]
-    nfr = len(os.listdir(fdir))
-    return a, offs, fdir, nfr
+    nfr = len([f for f in os.listdir(fdir) if f.endswith(".jpg")])
+    # tighten: keep speech, shorten long pauses to MAXP, then speed up by SPEED (picture follows the same map)
+    keep = []
+    s0 = max(0.0, sp0 - 0.08)
+    for i in range(len(segs) - 1):
+        gap = segs[i + 1][0] - segs[i][1]
+        if gap > MAXP:
+            keep.append((s0, segs[i][1] + MAXP / 2)); s0 = segs[i + 1][0] - MAXP / 2
+    keep.append((s0, min(sp1 + 0.12, len(a) / SR)))
+    pieces, mp, dst = [], [], 0.0
+    for k0, k1 in keep:
+        pieces.append(a[int(k0 * SR):int(k1 * SR)])
+        mp.append((dst / SPEED, k0, (k1 - k0) / SPEED)); dst += k1 - k0
+    xf = int(0.008 * SR)
+    for i in range(1, len(pieces)):
+        if len(pieces[i]) > xf and len(pieces[i - 1]) > xf:
+            pieces[i][:xf] *= np.linspace(0, 1, xf); pieces[i - 1][-xf:] *= np.linspace(1, 0, xf)
+    cat = np.concatenate(pieces)
+    if abs(SPEED - 1) > 1e-3:
+        tw = f"{OUT}/real/_tempo_in.wav"; to = f"{OUT}/real/_tempo_out.wav"
+        with wave.open(tw, "wb") as w:
+            w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes((np.clip(cat, -1, 1) * 32767).astype(np.int16).tobytes())
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", tw, "-af", f"atempo={SPEED}", "-ar", str(SR), to], check=True)
+        with wave.open(to) as w:
+            cat = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32768
+
+    def to_dst(x):
+        for d0, k0, ln in mp:
+            if x <= k0 + ln * SPEED:
+                return d0 + max(x - k0, 0) / SPEED
+        return mp[-1][0] + mp[-1][2]
+    offs = [(to_dst(o0), to_dst(o1)) for o0, o1 in offs]
+    return cat, offs, fdir, nfr, mp
 
 
-INTRO, CARD, OUTRO = 8.0, 3.0, 10.0
-GAP_SENT, GAP_TURN, GAP_SAME = 0.28, 0.55, 0.4
+INTRO, CARD, OUTRO = 7.0, 2.4, 7.5
+GAP_SENT, GAP_TURN, GAP_SAME = 0.28, 0.3, 0.4
+SPEED = float(os.environ.get("SPEED", "1.18")); MAXP = float(os.environ.get("MAXP", "0.22"))
 os.makedirs(f"{OUT}/real", exist_ok=True)
 t = INTRO
 timeline = dict(intro=[0, INTRO], parts=[], sr=SR, lines=[])
@@ -166,9 +198,9 @@ for p in PARTS:
         line = dict(spk=spk, n=n, t0=t, media=None)
         if mp:
             all_sents = [s for text, _ in items for s in split_sentences(text)]
-            a, offs, fdir, nfr = real_line(mp, all_sents, f"{PREFIX[spk]}{n}")
+            a, offs, fdir, nfr, vmap = real_line(mp, all_sents, f"{PREFIX[spk]}{n}")
             clips.append((t, a, spk))
-            line.update(media=fdir, nframes=nfr)
+            line.update(media=fdir, nframes=nfr, map=vmap, speed=SPEED)
             k = 0
             for text, vis in items:
                 ch = dict(spk=spk, text=text, visual=vis, sents=[], line=len(timeline["lines"]))
@@ -195,7 +227,7 @@ for p in PARTS:
         line["t1"] = t
         timeline["lines"].append(line)
         prev = spk
-    t += 0.9
+    t += 0.5
     part["end"] = t
     timeline["parts"].append(part)
 timeline["outro"] = [t, t + OUTRO]
