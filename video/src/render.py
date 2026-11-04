@@ -284,6 +284,57 @@ def video_frame(spk, t):
     return _jpg(f"{cur['media']}/{i + 1:05d}.jpg")
 
 
+def video_index(spk, t):
+    ls = [l for l in LINES if l["spk"] == spk and l.get("media")]
+    cur = next((l for l in ls if l["t0"] - 0.3 <= t <= l["t1"] + 0.3), None)
+    if cur is None:
+        nxt = [l for l in ls if l["t0"] > t]
+        cur = nxt[0] if nxt else ls[-1]
+    return cur, int(clamp((t - cur["t0"]) * FPS, 0, cur["nframes"] - 1))
+
+
+def has_mattes(spk):
+    ls = [l for l in LINES if l["spk"] == spk and l.get("media")]
+    return bool(ls) and all(os.path.isdir(l["media"] + "/mask") and len(os.listdir(l["media"] + "/mask")) >= l["nframes"] for l in ls)
+
+
+@functools.lru_cache(maxsize=1)
+def _soft():
+    from PIL import ImageFilter
+    return ImageFilter.GaussianBlur(2.2)
+
+
+def keyed_person(spk, t, size, tint=None):
+    """RGBA cut-out of the correspondent's live frame (white wall removed)."""
+    cur, i = video_index(spk, t)
+    fr = _jpg(f"{cur['media']}/{i + 1:05d}.jpg")
+    m = Image.open(f"{cur['media']}/mask/{i + 1:05d}.png").resize(fr.size, Image.BILINEAR)
+    a = np.asarray(m, np.float32) / 255
+    a = np.clip((a - 0.3) / 0.4, 0, 1)
+    rgb = fr
+    if tint is not None:
+        rgb = Image.blend(fr, Image.new("RGB", fr.size, tint[:3]), 0.08)
+    out = rgb.resize(size, Image.BICUBIC).convert("RGBA")
+    out.putalpha(Image.fromarray((a * 255).astype(np.uint8)).resize(size, Image.BILINEAR).filter(_soft()))
+    return out
+
+
+FIELD_TINT = {"city": (150, 160, 185), "ruins": (230, 140, 80), "camp": (170, 175, 190), "quiet": (150, 130, 170)}
+
+
+def r_field_keyed(shot, t, frame, out=(W, H)):
+    lt = t - shot["t0"]
+    kind = shot["part"]["field"]
+    img = scenes.field_frame(kind, lt + shot["part"]["num"] * 7, frame, ENV["M"], False, reporter=False, out=out).convert("RGB")
+    person = keyed_person("M", t, out, FIELD_TINT[kind])
+    from PIL import ImageFilter
+    glow = Image.new("RGBA", out, FIELD_TINT[kind] + (0,))
+    glow.putalpha(person.getchannel("A").filter(ImageFilter.GaussianBlur(14 * out[0] / W)).point(lambda v: int(v * .45)))
+    comp(img, glow)
+    comp(img, person)
+    return img
+
+
 def graded(fr, size, zoom=1.0, cx=0.5, cy=0.45):
     w, h = fr.size
     cw, ch = w / zoom, h / zoom
@@ -335,6 +386,8 @@ def r_studio(shot, t, frame, vis, out=(W, H)):
 
 def r_field(shot, t, frame, out=(W, H)):
     lt = t - shot["t0"]
+    if has_video("M") and has_mattes("M"):
+        return r_field_keyed(shot, t, frame, out)
     if has_video("M"):
         return r_video_full("M", shot, t) if out == (W, H) else graded(video_frame("M", t), out)
     return scenes.field_frame(shot["part"]["field"], lt + shot["part"]["num"] * 7, frame, ENV["M"], True, out=out)

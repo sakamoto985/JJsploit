@@ -63,20 +63,61 @@ def speech_segments(path, noise="-35dB", d=0.2):
     return segs, dur
 
 
+SEG_BIN = os.environ.get("SEG_BIN"); SEG_MODEL = os.environ.get("SEG_MODEL")
+
+
+def peak_gain(path):
+    out = subprocess.run(["ffmpeg", "-i", path, "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True).stderr
+    m = re.search(r"max_volume: ([-0-9.]+) dB", out)
+    return max(0.0, -3.0 - float(m.group(1))) if m else 0.0
+
+
+def person_crop(path, dur):
+    """16:9 crop framing the speaker (head + torso), found with the person-segmentation model."""
+    from PIL import Image
+    png = f"{OUT}/real/_probe.png"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{dur / 2:.2f}", "-i", path, "-frames:v", "1", png], check=True)
+    im = Image.open(png).convert("RGB"); W0, H0 = im.size
+    if not (SEG_BIN and SEG_MODEL):
+        return None
+    x = np.asarray(im.resize((320, 320)), np.float32); x /= x.max()
+    x = (x - [0.485, 0.456, 0.406]) / [0.229, 0.224, 0.225]
+    x.transpose(2, 0, 1).astype(np.float32).tofile(png + ".in")
+    subprocess.run([SEG_BIN, SEG_MODEL, png + ".in", png + ".out"], check=True, capture_output=True)
+    m = np.fromfile(png + ".out", np.float32).reshape(320, 320); m = (m - m.min()) / (m.max() - m.min() + 1e-6)
+    ys, xs = np.where(m > 0.5)
+    if len(ys) < 200:
+        return None
+    top = ys.min() / 320 * H0
+    cx = np.median(xs[ys < np.percentile(ys, 30)]) / 320 * W0     # centre on the head/upper body
+    ch = min(H0, max((H0 - top) * 1.25, H0 * 0.5)); cw = ch * 16 / 9
+    if cw > W0:
+        cw = W0; ch = cw * 9 / 16
+    y0 = max(0, min(top - ch * 0.10, H0 - ch)); x0 = max(0, min(cx - cw / 2, W0 - cw))
+    return int(cw) // 2 * 2, int(ch) // 2 * 2, int(x0), int(y0)
+
+
 def real_line(path, sents, tag):
     """Trim the recording to speech, normalise it, extract frames; return audio + sentence offsets."""
-    segs, dur = speech_segments(path)
+    g = peak_gain(path)
+    probe = path
+    if g > 1:
+        probe = f"{OUT}/real/_gain.wav"
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", path, "-af", f"volume={g:.1f}dB", "-ac", "1", probe], check=True)
+    segs, dur = speech_segments(probe)
     segs = [s for s in segs if s[1] - s[0] > 0.18] or [(0, dur)]
     a0 = max(0.0, segs[0][0] - 0.18); a1 = min(dur, segs[-1][1] + 0.25)
     wav = f"{OUT}/real/{tag}.wav"; fdir = f"{OUT}/real/{tag}"
     if not os.path.exists(wav):
-        af = "highpass=f=80,afftdn=nf=-25,acompressor=threshold=-20dB:ratio=2.5,loudnorm=I=-17:TP=-2:LRA=7"
+        af = f"volume={g:.1f}dB,highpass=f=80,afftdn=nf=-25,acompressor=threshold=-20dB:ratio=2.5,loudnorm=I=-17:TP=-2:LRA=7"
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{a0:.3f}", "-t", f"{a1 - a0:.3f}", "-i", path, "-af", af,
                         "-ar", str(SR), "-ac", "1", "-sample_fmt", "s16", wav], check=True)
     if not os.path.isdir(fdir):
         os.makedirs(fdir)
+        crop = person_crop(path, dur)
+        cf = f"crop={crop[0]}:{crop[1]}:{crop[2]}:{crop[3]}," if crop else ""
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{a0:.3f}", "-t", f"{a1 - a0:.3f}", "-i", path,
-                        "-vf", "fps=25,scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720", "-q:v", "3",
+                        "-vf", f"fps=25,{cf}scale=1280:720:force_original_aspect_ratio=increase:flags=lanczos,crop=1280:720,unsharp=5:5:0.6", "-q:v", "3",
                         f"{fdir}/%05d.jpg"], check=True)
     with wave.open(wav) as w:
         a = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32768
