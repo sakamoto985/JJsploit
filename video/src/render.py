@@ -258,10 +258,71 @@ def overlays(img, t, shot):
             break
 
 
+# ------------------------------------------------------------------------------------------ real video
+LINES = TL.get("lines", [])
+
+
+def has_video(spk):
+    return any(l["spk"] == spk and l.get("media") for l in LINES)
+
+
+@functools.lru_cache(maxsize=64)
+def _jpg(path):
+    return Image.open(path).convert("RGB")
+
+
+def video_frame(spk, t):
+    """Frame of `spk`'s recording at time t; between lines, hold the nearest line's first/last frame."""
+    ls = [l for l in LINES if l["spk"] == spk and l.get("media")]
+    if not ls:
+        return None
+    cur = next((l for l in ls if l["t0"] - 0.3 <= t <= l["t1"] + 0.3), None)
+    if cur is None:
+        nxt = [l for l in ls if l["t0"] > t]
+        cur = nxt[0] if nxt else ls[-1]
+    i = int(clamp((t - cur["t0"]) * FPS, 0, cur["nframes"] - 1))
+    return _jpg(f"{cur['media']}/{i + 1:05d}.jpg")
+
+
+def graded(fr, size, zoom=1.0, cx=0.5, cy=0.45):
+    w, h = fr.size
+    cw, ch = w / zoom, h / zoom
+    l = clamp(cx * w - cw / 2, 0, w - cw); tp = clamp(cy * h - ch / 2, 0, h - ch)
+    return fr.resize(size, Image.BICUBIC, box=(l, tp, l + cw, tp + ch))
+
+
+def r_video_full(spk, shot, t):
+    lt = t - shot["t0"]; dur = shot["t1"] - shot["t0"]
+    img = graded(video_frame(spk, t), (W, H), 1.0 + 0.04 * lt / max(dur, 1))
+    comp(img, vignette(W, H, .35))
+    return img
+
+
+def r_video_studio(shot, t, vis):
+    """Virtual-studio layout: anchor's video window + topic screen."""
+    p = shot["part"]
+    lt = t - shot["t0"]
+    img = gfx.bg_frame(t)
+    vw, vh = 1180, 664
+    x, y = 70, 150
+    d = Draw(img)
+    d.rectangle((x - 6, y - 6, x + vw + 6, y + vh + 6), fill=(229, 181, 74, 255))
+    img.paste(graded(video_frame("F", t), (vw, vh), 1.0 + 0.03 * min(lt / 10, 1)), (x, y))
+    scr = studio_screen(p["num"], vis == "studio_breaking").convert("RGB").resize((590, 332), Image.LANCZOS)
+    a = anim(lt, .2, .6)
+    sx = 1290 + (1 - a) * 80
+    d.rectangle((sx - 4, 300 - 4, sx + 594, 300 + 336), fill=(255, 255, 255, int(60 * a)))
+    paste(img, scr.convert("RGBA"), (sx, 300), a)
+    tracked(img, (sx, 270), "ON SCREEN", font("bold", 22), GOLD, track=6, alpha=a)
+    return img
+
+
 # ------------------------------------------------------------------------------------------ shot renderers
 def r_studio(shot, t, frame, vis, out=(W, H)):
     lt = t - shot["t0"]; dur = shot["t1"] - shot["t0"]
     p = shot["part"]
+    if has_video("F") and out == (W, H):
+        return r_video_full("F", shot, t) if vis in ("studio", "studio_wide") else r_video_studio(shot, t, vis)
     scr = studio_screen(p["num"], vis == "studio_breaking")
     if vis == "studio":
         cam = (1.42 + 0.04 * lt / max(dur, 1), 0.36, 0.42)
@@ -274,6 +335,8 @@ def r_studio(shot, t, frame, vis, out=(W, H)):
 
 def r_field(shot, t, frame, out=(W, H)):
     lt = t - shot["t0"]
+    if has_video("M"):
+        return r_video_full("M", shot, t) if out == (W, H) else graded(video_frame("M", t), out)
     return scenes.field_frame(shot["part"]["field"], lt + shot["part"]["num"] * 7, frame, ENV["M"], True, out=out)
 
 
@@ -289,7 +352,10 @@ def r_twobox(shot, t, frame, vis):
     pw, ph = 860, 484
     x0, x1, y = 80, W - 80 - pw, 210
     cp = chunk_at(t); spk = cp[0]["spk"] if cp else "F"
-    left = r_studio(shot, t, frame, "studio", out=(1150, 647)).crop((145, 60, 145 + pw, 60 + ph))
+    if has_video("F"):
+        left = graded(video_frame("F", t), (pw, ph))
+    else:
+        left = r_studio(shot, t, frame, "studio", out=(1150, 647)).crop((145, 60, 145 + pw, 60 + ph))
     connecting = vis == "twobox_connect" and lt < dur * 0.62
     if connecting:
         right = static_tiles()[frame % 4].copy()
