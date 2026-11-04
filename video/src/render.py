@@ -94,9 +94,9 @@ def logo_bug():
     im, s = ss_canvas(470, 80, 2)
     d = ImageDraw.Draw(im)
     d.rounded_rectangle((0, 0, 120 * s, 80 * s), 8 * s, fill=RED)
-    d.text((60 * s, 41 * s), "HNN", font=font("black", 46 * s), fill=WHITE, anchor="mm")
+    d.text((60 * s, 41 * s), "MB", font=font("black", 46 * s), fill=WHITE, anchor="mm")
     d.rounded_rectangle((112 * s, 10 * s, 470 * s - 1, 70 * s), 6 * s, fill=(8, 14, 28, 220))
-    d.text((134 * s, 30 * s), "HISTORY NEWS NETWORK", font=font("bold", 18 * s), fill=GOLD, anchor="lm")
+    d.text((134 * s, 30 * s), "MB NEWS", font=font("bold", 18 * s), fill=GOLD, anchor="lm")
     d.text((134 * s, 54 * s), "SPECIAL REPORT", font=font("black", 24 * s), fill=WHITE, anchor="lm")
     return down(im, s)
 
@@ -497,14 +497,14 @@ def r_intro(t):
         im, s = ss_canvas(360, 200, 2)
         dd = ImageDraw.Draw(im)
         dd.rounded_rectangle((0, 0, 360 * s, 200 * s), 18 * s, fill=RED)
-        dd.text((180 * s, 104 * s), "HNN", font=font("black", 130 * s), fill=WHITE, anchor="mm")
+        dd.text((180 * s, 104 * s), "MB", font=font("black", 130 * s), fill=WHITE, anchor="mm")
         im = down(im, s)
         sc = sz * la
         im = im.resize((max(1, int(360 * sc)), max(1, int(200 * sc))), Image.BILINEAR)
         cy = lerp(H / 2 - 40, 210, move)
         paste(img, im, (W / 2 - im.width / 2, cy - im.height / 2))
     sa = anim(t, 1.0, .6)
-    tracked(img, (W / 2, lerp(H / 2 + 110, 330, move)), "HISTORY NEWS NETWORK", font("bold", 30), GOLD, track=10, anchor="m", alpha=sa)
+    tracked(img, (W / 2, lerp(H / 2 + 110, 330, move)), "MB NEWS", font("bold", 30), GOLD, track=10, anchor="m", alpha=sa)
     ta = anim(t, 2.6, .7)
     if ta > 0:
         d.rectangle((W / 2 - 300 * ease(ta), 395, W / 2 + 300 * ease(ta), 445), fill=RED)
@@ -531,27 +531,11 @@ def r_outro(t):
     for i, (r, n) in enumerate(rows):
         ra = anim(lt, 1.0 + i * .5, .6)
         x = W / 2 - 420 + i * 840 / 1
-        x = W / 2 + (-260 if i == 0 else 260)
-        from figures import use_photos, photo
-        if use_photos():
-            who = "F" if i == 0 else "M"
-            ph = photo(who, 560 if who == "F" else 620)
-            box = ph.crop((0, 0, ph.width, int(ph.width * 0.62)))
-            sz = 300
-            # circular portrait: crop head & shoulders square
-            sq = ph.crop(((ph.width - int(ph.width * .62)) // 2, 0, (ph.width + int(ph.width * .62)) // 2, int(ph.width * .62))).resize((sz, sz), Image.LANCZOS)
-            bgc = Image.new("RGBA", (sz, sz), (30, 46, 80, 255)); bgc.alpha_composite(sq)
-            m = Image.new("L", (sz * 3, sz * 3), 0); ImageDraw.Draw(m).ellipse((0, 0, sz * 3 - 1, sz * 3 - 1), fill=255)
-            bgc.putalpha(m.resize((sz, sz), Image.LANCZOS))
-            ring = Image.new("RGBA", (sz + 16, sz + 16), (0, 0, 0, 0)); ImageDraw.Draw(ring).ellipse((0, 0, sz + 15, sz + 15), fill=GOLD)
-            ring.alpha_composite(bgc, (8, 8))
-            paste(img, ring, (x - ring.width / 2, 410 + (1 - ra) * 30), ra)
-        else:
-            paste(img, figure("F" if i == 0 else "M", 0, False, 0.42), (x - FW * .42 / 2, 400 + (1 - ra) * 30), ra)
-        draw_text(img, (x, 750 + (1 - ra) * 30), n, font("black", 54), WHITE, anchor="mm", alpha=ra)
-        draw_text(img, (x, 800 + (1 - ra) * 30), r, font("bold", 26), GOLD, anchor="mm", alpha=ra)
+        x = W / 2 + (-380 if i == 0 else 380)
+        draw_text(img, (x, 540 + (1 - ra) * 30), n, font("black", 80), WHITE, anchor="mm", alpha=ra)
+        draw_text(img, (x, 615 + (1 - ra) * 30), r, font("bold", 32), GOLD, anchor="mm", alpha=ra)
     ca = anim(lt, 2.5, .8)
-    draw_text(img, (W / 2, 900), "HNN · History News Network is fictional — this is a historical news re-creation of events from 1917–1922.",
+    draw_text(img, (W / 2, 900), "MB · A historical news re-creation of events from 1917–1922.",
               font("med", 26), (190, 200, 215, 255), anchor="mm", alpha=ca)
     draw_text(img, (W / 2, 945), "Maps: Natural Earth-derived outlines · Sets, graphics & animation: procedural · Music: original",
               font("med", 22), (150, 160, 180, 255), anchor="mm", alpha=ca)

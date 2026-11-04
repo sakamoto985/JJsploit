@@ -136,7 +136,7 @@ def _miguel(mouth, blink):
     for k in range(5):
         d.line((S(mx - 24), S(my2 - 90 + k * 12), S(mx + 24), S(my2 - 90 + k * 12)), fill=(70, 70, 76, 255), width=int(S(2)))
     d.rounded_rectangle((S(mx - 34), S(my2 - 28), S(mx + 34), S(my2 + 30)), radius=S(6), fill=RED)
-    d.text((S(mx), S(my2 + 1)), "HNN", font=font("black", int(S(22))), fill=WHITE, anchor="mm")
+    d.text((S(mx), S(my2 + 1)), "MB", font=font("black", int(S(22))), fill=WHITE, anchor="mm")
     # glove
     d.rounded_rectangle((S(mx - 40), S(my2 + 50), S(mx + 40), S(my2 + 130)), radius=S(30), fill=hexc("2A2620"))
     return down(im, s)
@@ -219,5 +219,5 @@ def mic_sprite(h=420):
     for k in range(6):
         d.line((S(24), S(14 + k * 12), S(86), S(14 + k * 12)), fill=(80, 80, 88, 255), width=int(S(2)))
     d.rounded_rectangle((S(8), S(80), S(102), S(150)), radius=S(8), fill=RED)
-    d.text((S(55), S(116)), "HNN", font=font("black", int(S(28))), fill=WHITE, anchor="mm")
+    d.text((S(55), S(116)), "MB", font=font("black", int(S(28))), fill=WHITE, anchor="mm")
     return down(im, s)

@@ -62,12 +62,12 @@ def studio_layers():
     comp(desk, dg.filter(ImageFilter.GaussianBlur(25)))
     cx = (x0 + x1) // 2
     dd.rounded_rectangle((cx - 170, top + 140, cx + 170, top + 300), 18, fill=(10, 18, 34, 255), outline=(255, 255, 255, 60), width=3)
-    draw_text(desk, (cx, top + 222), "HNN", font("black", 110), WHITE, anchor="mm")
+    draw_text(desk, (cx, top + 222), "MB", font("black", 110), WHITE, anchor="mm")
     dd.rectangle((cx - 120, top + 290, cx + 120, top + 298), fill=RED)
     # papers + laptop on desk
     dd.polygon([(1080, top - 26), (1240, top - 26), (1225, top - 38), (1095, top - 38)], fill=(240, 240, 240, 255))
     dd.polygon([(520, top - 26), (700, top - 26), (690, top - 110), (530, top - 110)], fill=(40, 46, 58, 255))
-    draw_text(desk, (610, top - 68), "HNN", font("black", 26), (120, 130, 150, 255), anchor="mm")
+    draw_text(desk, (610, top - 68), "MB", font("black", 26), (120, 130, 150, 255), anchor="mm")
     return bg, desk
 
 
