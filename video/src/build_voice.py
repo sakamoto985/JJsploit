@@ -2,7 +2,7 @@
 import json, re, subprocess, sys, wave, os
 import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
-from script_data import PARTS, SHORT
+from script_data import PARTS, SHORT_LINES
 CUT = os.environ.get("CUT", "")
 
 PIPER = sys.argv[1]          # dir with piper binary + voices/
@@ -168,12 +168,12 @@ def real_line(path, sents, tag, sel=None):
         offs = [(max(offs[i][0], sp0), min(offs[i][1], sp1)) for i in sel]
     # tighten: keep speech, shorten long pauses to MAXP, then speed up by SPEED (picture follows the same map)
     keep = []
-    s0 = max(0.0, sp0 - 0.08)
+    s0 = max(0.0, sp0 - 0.15)
     for i in range(len(segs) - 1):
         gap = segs[i + 1][0] - segs[i][1]
         if gap > MAXP:
             keep.append((s0, segs[i][1] + MAXP / 2)); s0 = segs[i + 1][0] - MAXP / 2
-    keep.append((s0, min(sp1 + 0.12, len(a) / SR)))
+    keep.append((s0, min(sp1 + 0.2, len(a) / SR)))
     pieces, mp, dst = [], [], 0.0
     for k0, k1 in keep:
         pieces.append(a[int(k0 * SR):int(k1 * SR)])
@@ -210,8 +210,19 @@ clips = []
 idx = 0
 count = {"F": 0, "M": 0}
 gline = 0
+shown = 0
 for p in PARTS:
-    part = dict(num=p["num"], title=p["title"], years=p["years"], headline=p["headline"],
+    _g = []
+    for spk_, text_, vis_ in p["chunks"]:
+        if _g and _g[-1] == spk_:
+            continue
+        _g.append(spk_)
+    if CUT == "short" and not any(gline + i + 1 in SHORT_LINES for i in range(len(_g))):
+        for spk_ in _g:
+            count[spk_] += 1; gline += 1
+        continue
+    shown += 1
+    part = dict(num=shown, title=p["title"], years=p["years"], headline=p["headline"],
                 field=p["field"], place=p["place"], card=[t, t + CARD], chunks=[])
     t += CARD + 0.25
     # group consecutive same-speaker chunks into the original script lines
@@ -228,8 +239,8 @@ for p in PARTS:
         count[spk] += 1
         n = count[spk]
         gline += 1
-        sel = SHORT.get(gline) if CUT == "short" else None
-        if CUT == "short" and sel is None:
+        sel = None
+        if CUT == "short" and gline not in SHORT_LINES:
             if prev is not None:
                 t -= GAP_TURN
             continue
