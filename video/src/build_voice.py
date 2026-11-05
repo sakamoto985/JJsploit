@@ -2,7 +2,7 @@
 import json, re, subprocess, sys, wave, os
 import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
-from script_data import PARTS, SHORT_LINES
+from script_data import PARTS, SHORT_LINES, SKIP_START
 CUT = os.environ.get("CUT", "")
 
 PIPER = sys.argv[1]          # dir with piper binary + voices/
@@ -127,6 +127,8 @@ def real_line(path, sents, tag, sel=None):
         a = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32768
     # sentence boundaries: split speech time by text length, snapped to the nearest pause
     segs = [(max(s0 - a0, 0), min(s1 - a0, a1 - a0)) for s0, s1 in segs]
+    if tag in SKIP_START:
+        segs = [x for x in segs if x[0] >= SKIP_START[tag]] or segs
     sp0, sp1 = segs[0][0], segs[-1][1]
     pauses = [(segs[i][1] + segs[i + 1][0]) / 2 for i in range(len(segs) - 1)]
     lens = np.cumsum([len(x) for x in sents]); lens = lens / lens[-1]

@@ -78,3 +78,6 @@ PARTS = [
 
 # 2-3 minute cut: whole lines only (original line numbers); nothing is cut inside a line
 SHORT_LINES = [1, 2, 3, 4, 5, 6, 24, 25, 26, 27, 33, 34]
+
+# recording fixes: skip a false start (seconds from the start of the trimmed take)
+SKIP_START = {"mi17": 2.0}
