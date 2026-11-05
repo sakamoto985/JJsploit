@@ -124,14 +124,16 @@ def build_music():
     add(music, brass(["D3", "A3", "D4", "F4"], 1.2), 0.20, 0.7)
     for k, nt in enumerate(["D4", "F4", "A4", "D5"]):
         add(music, brass([nt, nt[:-1] + str(int(nt[-1]) - 1)], BEAT * .6), 1.0 + k * BEAT / 2, 0.55)
-    theme_bed(1.0, 7.0, music, 0.9)
+    IL = TL["intro"][1]
+    theme_bed(1.0, IL - 0.6, music, 0.9)
     add(music, whoosh(0.8), 2.0, 0.6)
     add(music, timpani(49, 1.5), 2.65, 0.7)
     add(music, brass(["Bb2", "F3", "Bb3", "D4"], 0.7), 2.65, 0.6)
     add(music, timpani(55, 2.0), 3.4, 0.9)
     add(music, brass(["A2", "E3", "A3", "C#4"], 1.4), 3.4, 0.6)
-    add(music, brass(["D3", "A3", "D4", "F4", "A4"], 3.0), 5.0, 0.7)
-    add(music, timpani(55, 3.0), 5.0, 1.0)
+    if IL >= 7:
+        add(music, brass(["D3", "A3", "D4", "F4", "A4"], 3.0), 5.0, 0.7)
+        add(music, timpani(55, 3.0), 5.0, 1.0)
     # ---- part cards
     for p in TL["parts"]:
         c0 = p["card"][0]
@@ -160,9 +162,10 @@ def build_music():
     o0 = TL["outro"][0]
     add(music, timpani(55, 2.0), o0 + 0.1, 0.9)
     add(music, brass(["D3", "A3", "D4", "F4"], 1.6), o0 + 0.1, 0.6)
-    theme_bed(o0 + 0.1, o0 + 5.0, music, 0.8)
-    add(music, brass(["D3", "A3", "D4", "F4", "A4"], 2.4), o0 + 4.9, 0.7)
-    add(music, timpani(55, 2.4), o0 + 4.9, 1.0)
+    OL = TL["outro"][1] - o0
+    theme_bed(o0 + 0.1, o0 + OL - 2.6, music, 0.8)
+    add(music, brass(["D3", "A3", "D4", "F4", "A4"], 2.4), o0 + OL - 2.5, 0.7)
+    add(music, timpani(55, 2.4), o0 + OL - 2.5, 1.0)
     return music, bed
 
 

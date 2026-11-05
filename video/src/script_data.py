@@ -75,3 +75,7 @@ PARTS = [
   (F, "Thank you for watching our special report on the Russian Civil War. This has been our historical news coverage. Good afternoon, everyone!", "studio_wide"),
  ]),
 ]
+
+# 2-3 minute cut: original line number -> indices of the sentences kept (lines not listed are dropped)
+SHORT = {1: [0, 1, 2, 3], 2: [2], 3: [0], 4: [2, 3], 5: [0], 6: [1, 3], 11: [0, 1], 12: [1], 13: [0, 1, 2],
+         14: [0], 15: [1], 18: [0], 19: [1], 24: [0, 1], 25: [0], 26: [0], 27: [1], 33: [0, 1], 34: [0, 2]}

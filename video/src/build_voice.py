@@ -2,7 +2,8 @@
 import json, re, subprocess, sys, wave, os
 import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
-from script_data import PARTS
+from script_data import PARTS, SHORT
+CUT = os.environ.get("CUT", "")
 
 PIPER = sys.argv[1]          # dir with piper binary + voices/
 OUT = sys.argv[2]            # build dir
@@ -97,7 +98,7 @@ def person_crop(path, dur):
     return int(cw) // 2 * 2, int(ch) // 2 * 2, int(x0), int(y0)
 
 
-def real_line(path, sents, tag):
+def real_line(path, sents, tag, sel=None):
     """Trim the recording to speech, normalise it, extract frames; return audio + sentence offsets."""
     g = peak_gain(path)
     probe = path
@@ -132,8 +133,39 @@ def real_line(path, sents, tag):
         near = [p for p in pauses if abs(p - tgt) < 0.9 and p > bounds[-1] + 0.3]
         bounds.append(min(near, key=lambda p: abs(p - tgt)) if near else tgt)
     bounds.append(sp1)
+    # refine every inner boundary to the quietest 80 ms within +-0.7 s (gap between words)
+    hop = int(0.01 * SR)
+    ev = np.sqrt(np.convolve(a[:len(a) // hop * hop].reshape(-1, hop).astype(np.float64).__pow__(2).mean(1), np.ones(8) / 8, "same"))
+    speech_lvl = np.median(ev[ev > np.percentile(ev, 40)]) + 1e-9
+    quality = [0.0]
+    for i in range(1, len(bounds) - 1):
+        lo = max(bounds[i] - 0.7, bounds[i - 1] + 0.25); hi = min(bounds[i] + 0.7, bounds[i + 1] - 0.25)
+        i0, i1 = int(lo * 100), int(hi * 100)
+        if i1 > i0 + 2:
+            j = i0 + int(np.argmin(ev[i0:i1]))
+            bounds[i] = j / 100
+            quality.append(float(ev[j] / speech_lvl))
+        else:
+            quality.append(1.0)
+    quality.append(0.0)
     offs = [(bounds[i], bounds[i + 1]) for i in range(len(sents))]
     nfr = len([f for f in os.listdir(fdir) if f.endswith(".jpg")])
+    snapped = [q < 0.25 for q in quality]
+    if sel is not None:
+        wins = []
+        for i in sel:
+            w0, w1 = offs[i]
+            if wins and abs(wins[-1][1] - w0) < 1e-6:
+                wins[-1] = (wins[-1][0], w1)
+            else:
+                wins.append((w0, w1))
+        edges = sorted(set([i for i in sel] + [i + 1 for i in sel]))
+        bad = [(e, round(quality[e], 2)) for e in edges if not snapped[e] and not (e - 1 in sel and e in sel)]
+        if bad:
+            print(f"  {tag}: cut edge(s) not in a quiet gap {bad}", flush=True)
+        segs = [(max(a_, w0), min(b_, w1)) for a_, b_ in segs for w0, w1 in wins if min(b_, w1) - max(a_, w0) > 0.1]
+        sp0, sp1 = segs[0][0], segs[-1][1]
+        offs = [(max(offs[i][0], sp0), min(offs[i][1], sp1)) for i in sel]
     # tighten: keep speech, shorten long pauses to MAXP, then speed up by SPEED (picture follows the same map)
     keep = []
     s0 = max(0.0, sp0 - 0.08)
@@ -168,7 +200,7 @@ def real_line(path, sents, tag):
     return cat, offs, fdir, nfr, mp
 
 
-INTRO, CARD, OUTRO = 7.0, 2.4, 7.5
+INTRO, CARD, OUTRO = (5.5, 1.6, 5.0) if CUT == "short" else (7.0, 2.4, 7.5)
 GAP_SENT, GAP_TURN, GAP_SAME = 0.28, 0.3, 0.4
 SPEED = float(os.environ.get("SPEED", "1.18")); MAXP = float(os.environ.get("MAXP", "0.22"))
 os.makedirs(f"{OUT}/real", exist_ok=True)
@@ -177,6 +209,7 @@ timeline = dict(intro=[0, INTRO], parts=[], sr=SR, lines=[])
 clips = []
 idx = 0
 count = {"F": 0, "M": 0}
+gline = 0
 for p in PARTS:
     part = dict(num=p["num"], title=p["title"], years=p["years"], headline=p["headline"],
                 field=p["field"], place=p["place"], card=[t, t + CARD], chunks=[])
@@ -194,18 +227,30 @@ for p in PARTS:
             t += GAP_TURN
         count[spk] += 1
         n = count[spk]
+        gline += 1
+        sel = SHORT.get(gline) if CUT == "short" else None
+        if CUT == "short" and sel is None:
+            if prev is not None:
+                t -= GAP_TURN
+            continue
         mp = media_path(spk, n)
         line = dict(spk=spk, n=n, t0=t, media=None)
         if mp:
             all_sents = [s for text, _ in items for s in split_sentences(text)]
-            a, offs, fdir, nfr, vmap = real_line(mp, all_sents, f"{PREFIX[spk]}{n}")
+            a, offs, fdir, nfr, vmap = real_line(mp, all_sents, f"{PREFIX[spk]}{n}", sel)
+            keepset = set(sel) if sel is not None else set(range(len(all_sents)))
             clips.append((t, a, spk))
             line.update(media=fdir, nframes=nfr, map=vmap, speed=SPEED)
-            k = 0
+            k = 0; gi = 0
             for text, vis in items:
                 ch = dict(spk=spk, text=text, visual=vis, sents=[], line=len(timeline["lines"]))
                 for s in split_sentences(text):
-                    ch["sents"].append(dict(text=s, t0=t + offs[k][0], t1=t + offs[k][1])); k += 1
+                    if gi in keepset:
+                        ch["sents"].append(dict(text=s, t0=t + offs[k][0], t1=t + offs[k][1])); k += 1
+                    gi += 1
+                if not ch["sents"]:
+                    continue
+                ch["text"] = " ".join(x["text"] for x in ch["sents"])
                 ch["t0"], ch["t1"] = ch["sents"][0]["t0"], ch["sents"][-1]["t1"]
                 part["chunks"].append(ch)
             t += len(a) / SR
