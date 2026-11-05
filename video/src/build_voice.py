@@ -110,7 +110,10 @@ def real_line(path, sents, tag, sel=None):
     a0 = max(0.0, segs[0][0] - 0.18); a1 = min(dur, segs[-1][1] + 0.25)
     wav = f"{OUT}/real/{tag}.wav"; fdir = f"{OUT}/real/{tag}"
     if not os.path.exists(wav):
-        af = f"volume={g:.1f}dB,highpass=f=80,afftdn=nf=-25,acompressor=threshold=-20dB:ratio=2.5,loudnorm=I=-17:TP=-2:LRA=7"
+        # natural chain: no aggressive spectral denoise (it made quiet syllables sound metallic)
+        dn = "" if tag.startswith("mi") else "afftdn=nr=6:nf=-55,"
+        af = (f"volume={g:.1f}dB,highpass=f=75,{dn}equalizer=f=250:t=q:w=1.2:g=-2,equalizer=f=3500:t=q:w=1.5:g=2,"
+              "acompressor=threshold=-24dB:ratio=2:attack=12:release=220:makeup=2,loudnorm=I=-17:TP=-2:LRA=9")
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", f"{a0:.3f}", "-t", f"{a1 - a0:.3f}", "-i", path, "-af", af,
                         "-ar", str(SR), "-ac", "1", "-sample_fmt", "s16", wav], check=True)
     if not os.path.isdir(fdir):
